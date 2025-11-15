@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
 
 import { getDatabase } from "../db";
 
@@ -82,29 +83,34 @@ export default function Page() {
                     ListEmptyComponent={
                         <View className="flex-1 items-center justify-center px-4">
                             <Text className="text-gray-500">
-                                Chưa có liên hệ nào. Hãy thêm mới để bắt đầu.
+                                Chưa có liên hệ nào.
                             </Text>
                         </View>
                     }
                     renderItem={({ item }) => (
-                        <View className="px-4 py-3 border-b border-gray-100">
-                            <Text className="text-base font-medium text-gray-900">
-                                {item.name}
-                            </Text>
-                            {item.phone ? (
-                                <Text className="text-sm text-gray-600">
-                                    Phone: {item.phone}
+                        <View className="px-4 py-3 border-b border-gray-100 flex-row justify-between items-center">
+                            <View className="flex-1 pr-3">
+                                <Text className="text-base font-medium text-gray-900">
+                                    {item.name}
                                 </Text>
-                            ) : null}
-                            {item.email ? (
-                                <Text className="text-sm text-gray-600">
-                                    Email: {item.email}
-                                </Text>
-                            ) : null}
+                                {item.phone ? (
+                                    <Text className="text-sm text-gray-600">
+                                        Phone: {item.phone}
+                                    </Text>
+                                ) : null}
+                                {item.email ? (
+                                    <Text className="text-sm text-gray-600">
+                                        Email: {item.email}
+                                    </Text>
+                                ) : null}
+                            </View>
                             {item.favorite ? (
-                                <Text className="mt-1 text-xs font-semibold text-yellow-600">
-                                    Yêu thích
-                                </Text>
+                                <MaterialIcons
+                                    name="star"
+                                    size={20}
+                                    color="#f59e0b"
+                                    accessibilityLabel="Favorite contact"
+                                />
                             ) : null}
                         </View>
                     )}

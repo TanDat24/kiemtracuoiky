@@ -25,6 +25,7 @@ async function bootstrap(): Promise<SQLiteDatabase> {
   );
   `);
     await seedInitialContacts(db);
+    await ensureDefaultFavorite(db);
     return db;
 }
 
@@ -37,9 +38,9 @@ async function seedInitialContacts(db: SQLiteDatabase): Promise<void> {
     }
 
     const samples = [
-        { name: "Alice Nguyen", phone: "0901234567" },
-        { name: "Bao Tran", phone: "0987654321" },
-        { name: "Cuong Le", phone: "0912345678" },
+        { name: "Alice Nguyen", phone: "0901234567", favorite: 1 },
+        { name: "Bao Tran", phone: "0987654321", favorite: 0 },
+        { name: "Cuong Le", phone: "0912345678", favorite: 0 },
     ];
     const now = Date.now();
 
@@ -50,8 +51,29 @@ async function seedInitialContacts(db: SQLiteDatabase): Promise<void> {
             contact.name,
             contact.phone,
             null,
-            0,
+            contact.favorite ?? 0,
             now + index
         );
     }
+}
+
+async function ensureDefaultFavorite(db: SQLiteDatabase): Promise<void> {
+    const favorite = await db.getFirstAsync<{ id: number }>(
+        "SELECT id FROM contacts WHERE favorite = 1 LIMIT 1"
+    );
+    if (favorite) {
+        return;
+    }
+
+    const firstContact = await db.getFirstAsync<{ id: number }>(
+        "SELECT id FROM contacts ORDER BY id ASC LIMIT 1"
+    );
+    if (!firstContact) {
+        return;
+    }
+
+    await db.runAsync(
+        "UPDATE contacts SET favorite = 1 WHERE id = ?",
+        firstContact.id
+    );
 }
