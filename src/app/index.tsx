@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     KeyboardAvoidingView,
     Platform,
@@ -159,6 +160,31 @@ export default function Page() {
         }
     }
 
+    function handleConfirmDelete(contact: Contact) {
+        Alert.alert(
+            "Xóa liên hệ",
+            `Bạn có chắc muốn xóa "${contact.name}"?`,
+            [
+                { text: "Hủy", style: "cancel" },
+                {
+                    text: "Xóa",
+                    style: "destructive",
+                    onPress: () => handleDelete(contact),
+                },
+            ]
+        );
+    }
+
+    async function handleDelete(contact: Contact) {
+        try {
+            const db = await getDatabase();
+            await db.runAsync("DELETE FROM contacts WHERE id = ?", contact.id);
+            await loadContacts({ silent: true });
+        } catch (err) {
+            Alert.alert("Lỗi", (err as Error).message || "Không thể xóa liên hệ.");
+        }
+    }
+
     return (
         <View
             className="flex-1 bg-white"
@@ -249,6 +275,12 @@ export default function Page() {
                                     size={18}
                                     onPress={() => openEditModal(item)}
                                     accessibilityLabel="Sửa liên hệ"
+                                />
+                                <IconButton
+                                    icon="delete"
+                                    size={18}
+                                    onPress={() => handleConfirmDelete(item)}
+                                    accessibilityLabel="Xóa liên hệ"
                                 />
                             </View>
                         </View>
