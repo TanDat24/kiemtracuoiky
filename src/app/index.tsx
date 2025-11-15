@@ -6,6 +6,7 @@ import {
     Platform,
     StyleSheet,
     Text,
+    TouchableOpacity,
     View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -45,8 +46,10 @@ export default function Page() {
         general?: string;
     }>({});
 
-    const loadContacts = useCallback(async () => {
-        setLoading(true);
+    const loadContacts = useCallback(async (options?: { silent?: boolean }) => {
+        if (!options?.silent) {
+            setLoading(true);
+        }
         setError(null);
         try {
             const db = await getDatabase();
@@ -57,7 +60,9 @@ export default function Page() {
         } catch (err) {
             setError((err as Error).message);
         } finally {
-            setLoading(false);
+            if (!options?.silent) {
+                setLoading(false);
+            }
         }
     }, []);
 
@@ -114,7 +119,7 @@ export default function Page() {
                 0,
                 Date.now()
             );
-            await loadContacts();
+            await loadContacts({ silent: true });
             handleDismissModal();
         } catch (err) {
             setFormErrors({
@@ -122,6 +127,21 @@ export default function Page() {
             });
         } finally {
             setSubmitting(false);
+        }
+    }
+
+    async function handleToggleFavorite(contact: Contact) {
+        const nextFavorite = contact.favorite ? 0 : 1;
+        try {
+            const db = await getDatabase();
+            await db.runAsync(
+                "UPDATE contacts SET favorite = ? WHERE id = ?",
+                nextFavorite,
+                contact.id
+            );
+            await loadContacts({ silent: true });
+        } catch (err) {
+            setError((err as Error).message);
         }
     }
 
@@ -180,14 +200,26 @@ export default function Page() {
                                     </Text>
                                 ) : null}
                             </View>
-                            {item.favorite ? (
+                            <TouchableOpacity
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                    item.favorite
+                                        ? "Bỏ đánh dấu yêu thích"
+                                        : "Đánh dấu yêu thích"
+                                }
+                                onPress={() => handleToggleFavorite(item)}
+                                hitSlop={8}
+                            >
                                 <MaterialIcons
-                                    name="star"
-                                    size={20}
-                                    color="#f59e0b"
-                                    accessibilityLabel="Favorite contact"
+                                    name={
+                                        item.favorite ? "star" : "star-outline"
+                                    }
+                                    size={22}
+                                    color={
+                                        item.favorite ? "#f59e0b" : "#9ca3af"
+                                    }
                                 />
-                            ) : null}
+                            </TouchableOpacity>
                         </View>
                     )}
                 />
