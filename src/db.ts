@@ -13,17 +13,18 @@ export async function getDatabase(): Promise<SQLiteDatabase> {
 
 async function bootstrap(): Promise<SQLiteDatabase> {
     const db = await openDatabaseAsync(DB_NAME);
-    await db.execAsync(`
-  PRAGMA journal_mode = WAL;
-  CREATE TABLE IF NOT EXISTS contacts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    phone TEXT,
-    email TEXT,
-    favorite INTEGER DEFAULT 0,
-    created_at INTEGER
-  );
-  `);
+    // NOTE: On web (OPFS) using WAL can trigger AccessHandle conflicts.
+    // Keep a single statement per exec to reduce chance of race conditions.
+    await db.execAsync(
+        "CREATE TABLE IF NOT EXISTS contacts (" +
+            "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+            "name TEXT NOT NULL," +
+            "phone TEXT," +
+            "email TEXT," +
+            "favorite INTEGER DEFAULT 0," +
+            "created_at INTEGER" +
+            ");"
+    );
     await seedInitialContacts(db);
     await ensureDefaultFavorite(db);
     return db;

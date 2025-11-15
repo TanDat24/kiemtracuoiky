@@ -161,18 +161,14 @@ export default function Page() {
     }
 
     function handleConfirmDelete(contact: Contact) {
-        Alert.alert(
-            "Xóa liên hệ",
-            `Bạn có chắc muốn xóa "${contact.name}"?`,
-            [
-                { text: "Hủy", style: "cancel" },
-                {
-                    text: "Xóa",
-                    style: "destructive",
-                    onPress: () => handleDelete(contact),
-                },
-            ]
-        );
+        Alert.alert("Xóa liên hệ", `Bạn có chắc muốn xóa "${contact.name}"?`, [
+            { text: "Hủy", style: "cancel" },
+            {
+                text: "Xóa",
+                style: "destructive",
+                onPress: () => handleDelete(contact),
+            },
+        ]);
     }
 
     async function handleDelete(contact: Contact) {
@@ -181,7 +177,10 @@ export default function Page() {
             await db.runAsync("DELETE FROM contacts WHERE id = ?", contact.id);
             await loadContacts({ silent: true });
         } catch (err) {
-            Alert.alert("Lỗi", (err as Error).message || "Không thể xóa liên hệ.");
+            Alert.alert(
+                "Lỗi",
+                (err as Error).message || "Không thể xóa liên hệ."
+            );
         }
     }
 
