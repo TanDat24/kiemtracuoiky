@@ -1,7 +1,23 @@
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Text, View } from "react-native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+    ActivityIndicator,
+    FlatList,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
+import {
+    Button,
+    FAB,
+    HelperText,
+    Modal,
+    Portal,
+    TextInput,
+} from "react-native-paper";
 
 import { getDatabase } from "../db";
 
@@ -19,35 +35,95 @@ export default function Page() {
     const [contacts, setContacts] = useState<Contact[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+    const [form, setForm] = useState({ name: "", phone: "", email: "" });
+    const [formErrors, setFormErrors] = useState<{
+        name?: string;
+        email?: string;
+        phone?: string;
+        general?: string;
+    }>({});
+
+    const loadContacts = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const db = await getDatabase();
+            const rows = await db.getAllAsync<Contact>(
+                "SELECT id, name, phone, email, favorite, created_at FROM contacts ORDER BY favorite DESC, name COLLATE NOCASE ASC"
+            );
+            setContacts(rows);
+        } catch (err) {
+            setError((err as Error).message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        let isMounted = true;
+        loadContacts();
+    }, [loadContacts]);
 
-        async function loadContacts() {
-            try {
-                const db = await getDatabase();
-                const rows = await db.getAllAsync<Contact>(
-                    "SELECT id, name, phone, email, favorite, created_at FROM contacts ORDER BY favorite DESC, name COLLATE NOCASE ASC"
-                );
-                if (isMounted) {
-                    setContacts(rows);
-                }
-            } catch (err) {
-                if (isMounted) {
-                    setError((err as Error).message);
-                }
-            } finally {
-                if (isMounted) {
-                    setLoading(false);
-                }
-            }
+    function handleOpenModal() {
+        setForm({ name: "", phone: "", email: "" });
+        setFormErrors({});
+        setIsModalVisible(true);
+    }
+
+    function handleDismissModal() {
+        setIsModalVisible(false);
+        setFormErrors({});
+    }
+
+    function updateField(field: "name" | "phone" | "email", value: string) {
+        setForm((prev) => ({ ...prev, [field]: value }));
+        setFormErrors((prev) => ({
+            ...prev,
+            [field]: undefined,
+            general: undefined,
+        }));
+    }
+
+    async function handleSubmit() {
+        const trimmedName = form.name.trim();
+        const trimmedPhone = form.phone.trim();
+        const trimmedEmail = form.email.trim();
+
+        const nextErrors: { name?: string; email?: string } = {};
+        if (!trimmedName) {
+            nextErrors.name = "Tên không được để trống.";
+        }
+        if (trimmedEmail && !trimmedEmail.includes("@")) {
+            nextErrors.email = "Email không hợp lệ.";
+        }
+        if (Object.keys(nextErrors).length > 0) {
+            setFormErrors((prev) => ({ ...prev, ...nextErrors }));
+            return;
         }
 
-        loadContacts();
-        return () => {
-            isMounted = false;
-        };
-    }, []);
+        setSubmitting(true);
+        setFormErrors({});
+        try {
+            const db = await getDatabase();
+            await db.runAsync(
+                "INSERT INTO contacts (name, phone, email, favorite, created_at) VALUES (?, ?, ?, ?, ?)",
+                trimmedName,
+                trimmedPhone.length > 0 ? trimmedPhone : null,
+                trimmedEmail.length > 0 ? trimmedEmail : null,
+                0,
+                Date.now()
+            );
+            await loadContacts();
+            handleDismissModal();
+        } catch (err) {
+            setFormErrors({
+                general: (err as Error).message ?? "Không thể lưu liên hệ.",
+            });
+        } finally {
+            setSubmitting(false);
+        }
+    }
 
     return (
         <View
@@ -116,6 +192,120 @@ export default function Page() {
                     )}
                 />
             )}
+            <Portal>
+                <Modal
+                    visible={isModalVisible}
+                    onDismiss={handleDismissModal}
+                    contentContainerStyle={styles.modalContent}
+                >
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === "ios" ? "padding" : undefined}
+                    >
+                        <Text style={styles.modalTitle}>Thêm liên hệ</Text>
+                        <TextInput
+                            label="Tên"
+                            value={form.name}
+                            onChangeText={(value) => updateField("name", value)}
+                            mode="outlined"
+                            autoFocus
+                            error={!!formErrors.name}
+                        />
+                        <HelperText type="error" visible={!!formErrors.name}>
+                            {formErrors.name}
+                        </HelperText>
+
+                        <TextInput
+                            label="Số điện thoại"
+                            value={form.phone}
+                            onChangeText={(value) =>
+                                updateField("phone", value)
+                            }
+                            mode="outlined"
+                            keyboardType="phone-pad"
+                            style={styles.inputSpacing}
+                        />
+
+                        <TextInput
+                            label="Email"
+                            value={form.email}
+                            onChangeText={(value) =>
+                                updateField("email", value)
+                            }
+                            mode="outlined"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            error={!!formErrors.email}
+                            style={styles.inputSpacing}
+                        />
+                        <HelperText type="error" visible={!!formErrors.email}>
+                            {formErrors.email}
+                        </HelperText>
+
+                        {formErrors.general ? (
+                            <Text style={styles.generalError}>
+                                {formErrors.general}
+                            </Text>
+                        ) : null}
+
+                        <View style={styles.modalActions}>
+                            <Button
+                                onPress={handleDismissModal}
+                                disabled={submitting}
+                            >
+                                Hủy
+                            </Button>
+                            <Button
+                                mode="contained"
+                                onPress={handleSubmit}
+                                loading={submitting}
+                                disabled={submitting}
+                                style={styles.actionSpacing}
+                            >
+                                Lưu
+                            </Button>
+                        </View>
+                    </KeyboardAvoidingView>
+                </Modal>
+            </Portal>
+            <FAB
+                icon="plus"
+                label="Thêm"
+                onPress={handleOpenModal}
+                style={[styles.fab, { bottom: bottom + 24 }]}
+            />
         </View>
     );
 }
+
+const styles = StyleSheet.create({
+    modalContent: {
+        marginHorizontal: 16,
+        backgroundColor: "white",
+        borderRadius: 12,
+        padding: 16,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: "600",
+        marginBottom: 12,
+    },
+    inputSpacing: {
+        marginTop: 12,
+    },
+    modalActions: {
+        flexDirection: "row",
+        justifyContent: "flex-end",
+        marginTop: 16,
+    },
+    actionSpacing: {
+        marginLeft: 12,
+    },
+    fab: {
+        position: "absolute",
+        right: 16,
+    },
+    generalError: {
+        color: "#dc2626",
+        marginTop: 4,
+    },
+});

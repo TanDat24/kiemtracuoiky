@@ -4,6 +4,7 @@ import { useFonts } from "expo-font";
 import { MaterialIcons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
 import { useEffect } from "react";
+import { PaperProvider } from "react-native-paper";
 
 export default function Layout() {
     const [fontsLoaded, fontError] = useFonts(MaterialIcons.font);
@@ -22,5 +23,9 @@ export default function Layout() {
         );
     }
 
-    return <Slot />;
+    return (
+        <PaperProvider>
+            <Slot />
+        </PaperProvider>
+    );
 }
