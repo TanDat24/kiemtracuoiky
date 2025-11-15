@@ -15,5 +15,13 @@
     "expo-sqlite"
   ],
   "name": "nguyentandat_22675131",
-  "slug": "nguyentandat_22675131"
+  "slug": "nguyentandat_22675131",
+  "extra": {
+    "router": {
+      "origin": "https://n"
+    },
+    "eas": {
+      "projectId": "e5d6d673-7861-4cce-a29c-e2e76fc846c5"
+    }
+  }
 }
