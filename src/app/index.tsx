@@ -49,6 +49,9 @@ export default function Page() {
         general?: string;
     }>({});
     const [editingContact, setEditingContact] = useState<Contact | null>(null);
+    const [importLoading, setImportLoading] = useState(false);
+    const [importError, setImportError] = useState<string | null>(null);
+    const [importedCount, setImportedCount] = useState<number | null>(null);
 
     const loadContacts = useCallback(async (options?: { silent?: boolean }) => {
         if (!options?.silent) setLoading(true);
@@ -176,6 +179,59 @@ export default function Page() {
         });
     }, [contacts, search, favoritesOnly]);
 
+    const importFromApi = useCallback(async () => {
+        if (importLoading) return;
+        setImportLoading(true);
+        setImportError(null);
+        setImportedCount(null);
+        try {
+            // Demo endpoint: JSONPlaceholder users ↔ map to contacts.
+            const API_URL =
+                "https://68e7cf9510e3f82fbf40d84d.mockapi.io/NguyenTanDat_22675131";
+            const res = await fetch(API_URL);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = (await res.json()) as Array<any>;
+            const mapped = data.map((u) => ({
+                name: u.name || "(No name)",
+                phone: u.phone ? String(u.phone).replace(/\s+/g, "") : null,
+                email: u.email || null,
+            }));
+
+            const db = await getDatabase();
+            const existingRows = await db.getAllAsync<{ phone: string | null }>(
+                "SELECT phone FROM contacts WHERE phone IS NOT NULL"
+            );
+            const existingPhones = new Set(
+                existingRows
+                    .map((r) => (r.phone ? r.phone.trim() : ""))
+                    .filter((p) => p.length > 0)
+            );
+
+            let inserted = 0;
+            for (const item of mapped) {
+                if (!item.phone || existingPhones.has(item.phone.trim())) {
+                    continue; // skip duplicate or empty phone
+                }
+                await db.runAsync(
+                    "INSERT INTO contacts (name, phone, email, favorite, created_at) VALUES (?, ?, ?, ?, ?)",
+                    item.name,
+                    item.phone.trim(),
+                    item.email,
+                    0,
+                    Date.now()
+                );
+                existingPhones.add(item.phone.trim());
+                inserted++;
+            }
+            setImportedCount(inserted);
+            await loadContacts({ silent: true });
+        } catch (err) {
+            setImportError((err as Error).message);
+        } finally {
+            setImportLoading(false);
+        }
+    }, [importLoading, loadContacts]);
+
     function handleConfirmDelete(contact: Contact) {
         Alert.alert("Xóa liên hệ", `Bạn có chắc muốn xóa "${contact.name}"?`, [
             { text: "Hủy", style: "cancel" },
@@ -215,17 +271,29 @@ export default function Page() {
                             Danh bạ cục bộ lưu trong SQLite
                         </Text>
                     </View>
-                    <IconButton
-                        icon={favoritesOnly ? "star" : "star-outline"}
-                        size={22}
-                        onPress={toggleFavoritesOnly}
-                        accessibilityLabel={
-                            favoritesOnly
-                                ? "Hiển thị tất cả"
-                                : "Chỉ xem yêu thích"
-                        }
-                        iconColor={favoritesOnly ? "#f59e0b" : undefined}
-                    />
+                    <View
+                        style={{ flexDirection: "row", alignItems: "center" }}
+                    >
+                        <IconButton
+                            icon={favoritesOnly ? "star" : "star-outline"}
+                            size={22}
+                            onPress={toggleFavoritesOnly}
+                            accessibilityLabel={
+                                favoritesOnly
+                                    ? "Hiển thị tất cả"
+                                    : "Chỉ xem yêu thích"
+                            }
+                            iconColor={favoritesOnly ? "#f59e0b" : undefined}
+                        />
+                        <Button
+                            mode="outlined"
+                            onPress={importFromApi}
+                            loading={importLoading}
+                            disabled={importLoading}
+                        >
+                            Import từ API
+                        </Button>
+                    </View>
                 </View>
                 <TextInput
                     value={search}
@@ -237,6 +305,15 @@ export default function Page() {
                     autoCorrect={false}
                     autoCapitalize="none"
                 />
+                {importError ? (
+                    <Text className="text-xs text-red-500 mt-1">
+                        Lỗi import: {importError}
+                    </Text>
+                ) : importedCount !== null ? (
+                    <Text className="text-xs text-green-600 mt-1">
+                        Đã import {importedCount} liên hệ mới.
+                    </Text>
+                ) : null}
             </View>
             {loading ? (
                 <View className="flex-1 items-center justify-center">
