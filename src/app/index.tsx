@@ -18,8 +18,8 @@ import {
     Modal,
     Portal,
     TextInput,
+    IconButton,
 } from "react-native-paper";
-
 import { getDatabase } from "../db";
 
 type Contact = {
@@ -45,11 +45,10 @@ export default function Page() {
         phone?: string;
         general?: string;
     }>({});
+    const [editingContact, setEditingContact] = useState<Contact | null>(null);
 
     const loadContacts = useCallback(async (options?: { silent?: boolean }) => {
-        if (!options?.silent) {
-            setLoading(true);
-        }
+        if (!options?.silent) setLoading(true);
         setError(null);
         try {
             const db = await getDatabase();
@@ -60,9 +59,7 @@ export default function Page() {
         } catch (err) {
             setError((err as Error).message);
         } finally {
-            if (!options?.silent) {
-                setLoading(false);
-            }
+            if (!options?.silent) setLoading(false);
         }
     }, []);
 
@@ -70,15 +67,27 @@ export default function Page() {
         loadContacts();
     }, [loadContacts]);
 
-    function handleOpenModal() {
+    function openCreateModal() {
+        setEditingContact(null);
         setForm({ name: "", phone: "", email: "" });
         setFormErrors({});
         setIsModalVisible(true);
     }
 
-    function handleDismissModal() {
-        setIsModalVisible(false);
+    function openEditModal(contact: Contact) {
+        setEditingContact(contact);
+        setForm({
+            name: contact.name ?? "",
+            phone: contact.phone ?? "",
+            email: contact.email ?? "",
+        });
         setFormErrors({});
+        setIsModalVisible(true);
+    }
+
+    function dismissModal() {
+        setIsModalVisible(false);
+        setEditingContact(null);
     }
 
     function updateField(field: "name" | "phone" | "email", value: string) {
@@ -94,36 +103,41 @@ export default function Page() {
         const trimmedName = form.name.trim();
         const trimmedPhone = form.phone.trim();
         const trimmedEmail = form.email.trim();
-
         const nextErrors: { name?: string; email?: string } = {};
-        if (!trimmedName) {
-            nextErrors.name = "Tên không được để trống.";
-        }
-        if (trimmedEmail && !trimmedEmail.includes("@")) {
+        if (!trimmedName) nextErrors.name = "Tên không được để trống.";
+        if (trimmedEmail && !trimmedEmail.includes("@"))
             nextErrors.email = "Email không hợp lệ.";
-        }
-        if (Object.keys(nextErrors).length > 0) {
+        if (Object.keys(nextErrors).length) {
             setFormErrors((prev) => ({ ...prev, ...nextErrors }));
             return;
         }
-
         setSubmitting(true);
         setFormErrors({});
         try {
             const db = await getDatabase();
-            await db.runAsync(
-                "INSERT INTO contacts (name, phone, email, favorite, created_at) VALUES (?, ?, ?, ?, ?)",
-                trimmedName,
-                trimmedPhone.length > 0 ? trimmedPhone : null,
-                trimmedEmail.length > 0 ? trimmedEmail : null,
-                0,
-                Date.now()
-            );
+            if (editingContact) {
+                await db.runAsync(
+                    "UPDATE contacts SET name = ?, phone = ?, email = ? WHERE id = ?",
+                    trimmedName,
+                    trimmedPhone ? trimmedPhone : null,
+                    trimmedEmail ? trimmedEmail : null,
+                    editingContact.id
+                );
+            } else {
+                await db.runAsync(
+                    "INSERT INTO contacts (name, phone, email, favorite, created_at) VALUES (?, ?, ?, ?, ?)",
+                    trimmedName,
+                    trimmedPhone ? trimmedPhone : null,
+                    trimmedEmail ? trimmedEmail : null,
+                    0,
+                    Date.now()
+                );
+            }
             await loadContacts({ silent: true });
-            handleDismissModal();
+            dismissModal();
         } catch (err) {
             setFormErrors({
-                general: (err as Error).message ?? "Không thể lưu liên hệ.",
+                general: (err as Error).message || "Không thể lưu liên hệ.",
             });
         } finally {
             setSubmitting(false);
@@ -158,7 +172,6 @@ export default function Page() {
                     Danh bạ cục bộ lưu trong SQLite
                 </Text>
             </View>
-
             {loading ? (
                 <View className="flex-1 items-center justify-center">
                     <ActivityIndicator size="small" />
@@ -185,41 +198,59 @@ export default function Page() {
                     }
                     renderItem={({ item }) => (
                         <View className="px-4 py-3 border-b border-gray-100 flex-row justify-between items-center">
-                            <View className="flex-1 pr-3">
-                                <Text className="text-base font-medium text-gray-900">
-                                    {item.name}
-                                </Text>
-                                {item.phone ? (
-                                    <Text className="text-sm text-gray-600">
-                                        Phone: {item.phone}
-                                    </Text>
-                                ) : null}
-                                {item.email ? (
-                                    <Text className="text-sm text-gray-600">
-                                        Email: {item.email}
-                                    </Text>
-                                ) : null}
-                            </View>
                             <TouchableOpacity
-                                accessibilityRole="button"
-                                accessibilityLabel={
-                                    item.favorite
-                                        ? "Bỏ đánh dấu yêu thích"
-                                        : "Đánh dấu yêu thích"
-                                }
-                                onPress={() => handleToggleFavorite(item)}
-                                hitSlop={8}
+                                style={styles.detailsZone}
+                                activeOpacity={0.6}
+                                onLongPress={() => openEditModal(item)}
                             >
-                                <MaterialIcons
-                                    name={
-                                        item.favorite ? "star" : "star-outline"
-                                    }
-                                    size={22}
-                                    color={
-                                        item.favorite ? "#f59e0b" : "#9ca3af"
-                                    }
-                                />
+                                <View className="flex-1 pr-3">
+                                    <Text className="text-base font-medium text-gray-900">
+                                        {item.name}
+                                    </Text>
+                                    {item.phone ? (
+                                        <Text className="text-sm text-gray-600">
+                                            Phone: {item.phone}
+                                        </Text>
+                                    ) : null}
+                                    {item.email ? (
+                                        <Text className="text-sm text-gray-600">
+                                            Email: {item.email}
+                                        </Text>
+                                    ) : null}
+                                </View>
                             </TouchableOpacity>
+                            <View style={styles.rowActions}>
+                                <TouchableOpacity
+                                    accessibilityRole="button"
+                                    accessibilityLabel={
+                                        item.favorite
+                                            ? "Bỏ đánh dấu yêu thích"
+                                            : "Đánh dấu yêu thích"
+                                    }
+                                    onPress={() => handleToggleFavorite(item)}
+                                    hitSlop={8}
+                                >
+                                    <MaterialIcons
+                                        name={
+                                            item.favorite
+                                                ? "star"
+                                                : "star-outline"
+                                        }
+                                        size={22}
+                                        color={
+                                            item.favorite
+                                                ? "#f59e0b"
+                                                : "#9ca3af"
+                                        }
+                                    />
+                                </TouchableOpacity>
+                                <IconButton
+                                    icon="pencil"
+                                    size={18}
+                                    onPress={() => openEditModal(item)}
+                                    accessibilityLabel="Sửa liên hệ"
+                                />
+                            </View>
                         </View>
                     )}
                 />
@@ -227,17 +258,21 @@ export default function Page() {
             <Portal>
                 <Modal
                     visible={isModalVisible}
-                    onDismiss={handleDismissModal}
+                    onDismiss={dismissModal}
                     contentContainerStyle={styles.modalContent}
                 >
                     <KeyboardAvoidingView
                         behavior={Platform.OS === "ios" ? "padding" : undefined}
                     >
-                        <Text style={styles.modalTitle}>Thêm liên hệ</Text>
+                        <Text style={styles.modalTitle}>
+                            {editingContact
+                                ? "Chỉnh sửa liên hệ"
+                                : "Thêm liên hệ"}
+                        </Text>
                         <TextInput
                             label="Tên"
                             value={form.name}
-                            onChangeText={(value) => updateField("name", value)}
+                            onChangeText={(v) => updateField("name", v)}
                             mode="outlined"
                             autoFocus
                             error={!!formErrors.name}
@@ -245,24 +280,18 @@ export default function Page() {
                         <HelperText type="error" visible={!!formErrors.name}>
                             {formErrors.name}
                         </HelperText>
-
                         <TextInput
                             label="Số điện thoại"
                             value={form.phone}
-                            onChangeText={(value) =>
-                                updateField("phone", value)
-                            }
+                            onChangeText={(v) => updateField("phone", v)}
                             mode="outlined"
                             keyboardType="phone-pad"
                             style={styles.inputSpacing}
                         />
-
                         <TextInput
                             label="Email"
                             value={form.email}
-                            onChangeText={(value) =>
-                                updateField("email", value)
-                            }
+                            onChangeText={(v) => updateField("email", v)}
                             mode="outlined"
                             keyboardType="email-address"
                             autoCapitalize="none"
@@ -272,16 +301,14 @@ export default function Page() {
                         <HelperText type="error" visible={!!formErrors.email}>
                             {formErrors.email}
                         </HelperText>
-
                         {formErrors.general ? (
                             <Text style={styles.generalError}>
                                 {formErrors.general}
                             </Text>
                         ) : null}
-
                         <View style={styles.modalActions}>
                             <Button
-                                onPress={handleDismissModal}
+                                onPress={dismissModal}
                                 disabled={submitting}
                             >
                                 Hủy
@@ -302,7 +329,7 @@ export default function Page() {
             <FAB
                 icon="plus"
                 label="Thêm"
-                onPress={handleOpenModal}
+                onPress={openCreateModal}
                 style={[styles.fab, { bottom: bottom + 24 }]}
             />
         </View>
@@ -339,5 +366,12 @@ const styles = StyleSheet.create({
     generalError: {
         color: "#dc2626",
         marginTop: 4,
+    },
+    rowActions: {
+        flexDirection: "row",
+        alignItems: "center",
+    },
+    detailsZone: {
+        flex: 1,
     },
 });
