@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -40,6 +40,8 @@ export default function Page() {
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [form, setForm] = useState({ name: "", phone: "", email: "" });
+    const [search, setSearch] = useState("");
+    const [favoritesOnly, setFavoritesOnly] = useState(false);
     const [formErrors, setFormErrors] = useState<{
         name?: string;
         email?: string;
@@ -159,6 +161,20 @@ export default function Page() {
             setError((err as Error).message);
         }
     }
+    const toggleFavoritesOnly = useCallback(() => {
+        setFavoritesOnly((prev) => !prev);
+    }, []);
+
+    const filteredContacts = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        return contacts.filter((c) => {
+            if (favoritesOnly && !c.favorite) return false;
+            if (!q) return true;
+            const nameMatch = c.name.toLowerCase().includes(q);
+            const phoneMatch = (c.phone || "").toLowerCase().includes(q);
+            return nameMatch || phoneMatch;
+        });
+    }, [contacts, search, favoritesOnly]);
 
     function handleConfirmDelete(contact: Contact) {
         Alert.alert("Xóa liên hệ", `Bạn có chắc muốn xóa "${contact.name}"?`, [
@@ -190,12 +206,37 @@ export default function Page() {
             style={{ paddingTop: top, paddingBottom: bottom }}
         >
             <View className="px-4 py-3 border-b border-gray-200 bg-gray-50">
-                <Text className="text-xl font-semibold text-gray-900">
-                    Simple Contacts
-                </Text>
-                <Text className="text-sm text-gray-500">
-                    Danh bạ cục bộ lưu trong SQLite
-                </Text>
+                <View className="flex-row justify-between items-center mb-2">
+                    <View style={{ flex: 1 }}>
+                        <Text className="text-xl font-semibold text-gray-900">
+                            Simple Contacts
+                        </Text>
+                        <Text className="text-sm text-gray-500">
+                            Danh bạ cục bộ lưu trong SQLite
+                        </Text>
+                    </View>
+                    <IconButton
+                        icon={favoritesOnly ? "star" : "star-outline"}
+                        size={22}
+                        onPress={toggleFavoritesOnly}
+                        accessibilityLabel={
+                            favoritesOnly
+                                ? "Hiển thị tất cả"
+                                : "Chỉ xem yêu thích"
+                        }
+                        iconColor={favoritesOnly ? "#f59e0b" : undefined}
+                    />
+                </View>
+                <TextInput
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder="Tìm theo tên hoặc số điện thoại"
+                    mode="outlined"
+                    left={<TextInput.Icon icon="magnify" />}
+                    dense
+                    autoCorrect={false}
+                    autoCapitalize="none"
+                />
             </View>
             {loading ? (
                 <View className="flex-1 items-center justify-center">
@@ -209,15 +250,17 @@ export default function Page() {
                 </View>
             ) : (
                 <FlatList
-                    data={contacts}
+                    data={filteredContacts}
                     keyExtractor={(item) => item.id.toString()}
                     contentContainerStyle={
-                        contacts.length === 0 ? { flex: 1 } : undefined
+                        filteredContacts.length === 0 ? { flex: 1 } : undefined
                     }
                     ListEmptyComponent={
                         <View className="flex-1 items-center justify-center px-4">
                             <Text className="text-gray-500">
-                                Chưa có liên hệ nào.
+                                {search.trim().length > 0
+                                    ? "Không tìm thấy kết quả."
+                                    : "Chưa có liên hệ nào."}
                             </Text>
                         </View>
                     }
